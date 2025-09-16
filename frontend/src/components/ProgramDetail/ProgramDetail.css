@@ -1,0 +1,15 @@
+.program-details-pre {
+  white-space: pre-wrap; /* Allows text to wrap */
+  font-family: inherit; /* Use the default font */
+  font-size: 1rem;
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 5px;
+}
+
+.booking-card {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  position: sticky;
+  top: 20px;
+}
