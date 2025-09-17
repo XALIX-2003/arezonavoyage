@@ -13,3 +13,52 @@
   position: sticky;
   top: 20px;
 }
+
+/* Timeline styles */
+.timeline {
+  position: relative;
+  padding: 20px 0;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 15px; /* Adjust this to center the line */
+  width: 3px;
+  background-color: #e9ecef; /* Light gray line */
+}
+
+.timeline-item {
+  position: relative;
+  margin-bottom: 30px;
+  padding-left: 50px; /* Space for marker */
+}
+
+.timeline-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #007bff; /* Primary blue color for marker */
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  box-shadow: 0 0 0 3px white, inset 0 2px 0 rgba(0, 0, 0, 0.08), 0 3px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.timeline-content {
+  background-color: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 0.25rem;
+  padding: 15px;
+}
+
+.timeline-content .card-title {
+  color: #007bff; /* Match marker color */
+}

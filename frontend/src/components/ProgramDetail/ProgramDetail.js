@@ -39,7 +39,21 @@ function ProgramDetail() {
                 <p className="lead text-muted">{program.destination}</p>
                 <hr />
                 <h3 className="mt-4">Programme détaillé (jour par jour)</h3>
-                <pre className="program-details-pre">{program.details}</pre>
+                
+                <div className="timeline">
+                    {program.details.map((dayDetail, index) => (
+                        <div className="timeline-item" key={index}>
+                            <div className="timeline-marker">Jour {dayDetail.day}</div>
+                            <div className="timeline-content card shadow-sm mb-3">
+                                <div className="card-body">
+                                    <h5 className="card-title">{dayDetail.title}</h5>
+                                    <p className="card-text">{dayDetail.description}</p>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
             </div>
             <div className="col-md-4">
                 <div className="booking-card p-4 rounded shadow-sm">
