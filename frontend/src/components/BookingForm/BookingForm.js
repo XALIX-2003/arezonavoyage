@@ -63,7 +63,7 @@ function BookingForm() {
   }
 
   return (
-    <div>
+    <div className="container py-5">
       <h1 className="mb-4">Complétez votre réservation</h1>
       <div className="card bg-light mb-4">
         <div className="card-body">
@@ -82,23 +82,23 @@ function BookingForm() {
               <div className="row g-3">
                 <div className="col-md-6">
                   <label htmlFor={`nom-${index}`} className="form-label">Nom</label>
-                  <input type="text" id={`nom-${index}`} name="nom" className="form-control" required onChange={(e) => handleInputChange(index, e)} />
+                  <input type="text" id={`nom-${index}`} name="nom" className="form-control" required onChange={(e) => handleInputChange(index, e)} value={travelers[index].nom} />
                 </div>
                 <div className="col-md-6">
                   <label htmlFor={`prenom-${index}`} className="form-label">Prénom</label>
-                  <input type="text" id={`prenom-${index}`} name="prenom" className="form-control" required onChange={(e) => handleInputChange(index, e)} />
+                  <input type="text" id={`prenom-${index}`} name="prenom" className="form-control" required onChange={(e) => handleInputChange(index, e)} value={travelers[index].prenom} />
                 </div>
                 <div className="col-md-6">
                   <label htmlFor={`email-${index}`} className="form-label">Email</label>
-                  <input type="email" id={`email-${index}`} name="email" className="form-control" required onChange={(e) => handleInputChange(index, e)} />
+                  <input type="email" id={`email-${index}`} name="email" className="form-control" required onChange={(e) => handleInputChange(index, e)} value={travelers[index].email} />
                 </div>
                 <div className="col-md-6">
                   <label htmlFor={`telephone-${index}`} className="form-label">Téléphone</label>
-                  <input type="tel" id={`telephone-${index}`} name="telephone" className="form-control" required onChange={(e) => handleInputChange(index, e)} />
+                  <input type="tel" id={`telephone-${index}`} name="telephone" className="form-control" required onChange={(e) => handleInputChange(index, e)} value={travelers[index].telephone} />
                 </div>
                 <div className="col-md-12">
                   <label htmlFor={`ville-${index}`} className="form-label">Ville</label>
-                  <input type="text" id={`ville-${index}`} name="ville" className="form-control" required onChange={(e) => handleInputChange(index, e)} />
+                  <input type="text" id={`ville-${index}`} name="ville" className="form-control" required onChange={(e) => handleInputChange(index, e)} value={travelers[index].ville} />
                 </div>
               </div>
             </div>
@@ -119,10 +119,8 @@ function BookingForm() {
             </div>
         </div>
         
-        {error && <div className="alert alert-danger">{error}</div>}
-
-        <button type="submit" className="btn btn-primary btn-lg w-100" disabled={isSubmitting}>
-          {isSubmitting ? 'Envoi en cours...' : 'Confirmer la réservation'}
+        <button type="submit" className="btn btn-primary btn-lg w-100">
+          Confirmer la réservation
         </button>
       </form>
     </div>

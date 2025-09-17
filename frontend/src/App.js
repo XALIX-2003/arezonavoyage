@@ -12,6 +12,8 @@ import About from './components/About/About';
 import ProgramDetail from './components/ProgramDetail/ProgramDetail';
 import BookingForm from './components/BookingForm/BookingForm';
 import ThankYou from './components/ThankYou/ThankYou';
+import AdminLogin from './components/AdminLogin/AdminLogin';
+import AdminDashboard from './components/AdminDashboard/AdminDashboard';
 
 function App() {
   return (
@@ -28,6 +30,8 @@ function App() {
             <Route path="/about" element={<About />} />
             <Route path="/booking" element={<BookingForm />} />
             <Route path="/thank-you" element={<ThankYou />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/dashboard" element={<AdminDashboard />} />
           </Routes>
         </main>
         <Footer />

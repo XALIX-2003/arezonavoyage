@@ -8,10 +8,76 @@
 }
 
 .booking-card {
-  background-color: #f8f9fa;
+  background-color: var(--white-color);
   border: 1px solid #dee2e6;
   position: sticky;
   top: 20px;
+}
+
+/* Image Wrapper */
+.program-detail-image-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%; /* 16:9 Aspect Ratio */
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.program-detail-image-wrapper img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.program-detail-image-wrapper .program-carousel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.program-detail-image-wrapper .carousel-controls {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.program-detail-image-wrapper .carousel-btn {
+  background: rgba(236, 91, 41, 0.8);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s;
+}
+
+.program-detail-image-wrapper .carousel-btn:hover {
+  background: #d94f21;
+}
+
+.program-detail-image-wrapper .carousel-indicator {
+  background: rgba(255,255,255,0.8);
+  color: var(--primary-color);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 /* Timeline styles */
@@ -42,14 +108,16 @@
   left: 0;
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background-color: #007bff; /* Primary blue color for marker */
+  border-radius: 8px;
+  background-color: var(--primary-color);
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  box-shadow: 0 0 0 3px white, inset 0 2px 0 rgba(0, 0, 0, 0.08), 0 3px 0 4px rgba(0, 0, 0, 0.05);
+  font-size: 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--primary-color);
 }
 
 .timeline-content {
@@ -60,5 +128,17 @@
 }
 
 .timeline-content .card-title {
-  color: #007bff; /* Match marker color */
+  color: var(--primary-color);
+}
+
+.timeline-content ul {
+  padding-left: 0;
+  list-style-position: outside;
+  margin-left: 0;
+}
+
+.timeline-content ul li {
+  margin-bottom: 0px;
+  padding-left: 30px; /* Indent the text */
+  text-indent: -30px;
 }

@@ -1,0 +1,36 @@
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.calendar-header-cell {
+  text-align: center;
+  font-weight: bold;
+  padding: 5px;
+}
+
+.calendar-day-cell {
+  text-align: center;
+  padding: 10px 5px;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.calendar-day-cell.empty {
+  border: none;
+  cursor: default;
+}
+
+.calendar-day-cell.available {
+  background-color: #d4edda; /* A light green color */
+  color: #155724; /* A dark green color */
+  font-weight: bold;
+}
+
+.calendar-day-cell.selected {
+  background-color: #0d6efd;
+  color: white;
+  border: 1px solid #0d6efd;
+}

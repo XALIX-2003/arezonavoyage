@@ -1,11 +1,53 @@
-export const programsData = [
+import agadir1 from './assets/images/agadir/agadir-1.png';
+import agadir2 from './assets/images/agadir/agadir-2.png';
+import agadir3 from './assets/images/agadir/agadir-3.png';
+import agadir4 from './assets/images/agadir/agadir-4.png';
+import agadir5 from './assets/images/agadir/agadir-5.png';
+import marrakech1 from './assets/images/marrakech/marrakech-1.png';
+import marrakech2 from './assets/images/marrakech/marrakech-2.png';
+import marrakech3 from './assets/images/marrakech/marrakech-3.png';
+import marrakech4 from './assets/images/marrakech/marrakech-4.png';
+import marrakech5 from './assets/images/marrakech/marrakech-5.png';
+import marrakech6 from './assets/images/marrakech/marrakech-6.png';
+import dakhla1 from './assets/images/dakhla/dakhla-1.png';
+import dakhla2 from './assets/images/dakhla/dakhla-2.png';
+import dakhla3 from './assets/images/dakhla/dakhla-3.png';
+import dakhla4 from './assets/images/dakhla/dakhla-4.png';
+import dakhla5 from './assets/images/dakhla/dakhla-5.png';
+
+const generateRandomAvailability = () => {
+  const availability = {};
+  const today = new Date();
+  const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    const daysInMonth = new Date(year, date.getMonth() + 1, 0).getDate();
+    const availableDays = new Set();
+
+    const numberOfAvailableSlots = Math.floor(Math.random() * 10) + 5; // 5 to 14 available slots
+
+    for (let j = 0; j < numberOfAvailableSlots; j++) {
+      const day = Math.floor(Math.random() * daysInMonth) + 1;
+      availableDays.add(day);
+    }
+    availability[`${month} ${year}`] = Array.from(availableDays).sort((a, b) => a - b);
+  }
+
+  return availability;
+};
+
+const programs = [
   {
     id: 1,
     title: 'Marrakech, Imlil & Agafay',
     destination: 'Maroc',
     duration: '3 Jours / 2 Nuits',
     price: '85',
-    image: 'https://images.unsplash.com/photo-1559910369-3924e235c1cf?q=80&w=2070&auto=format&fit=crop',
+    image: marrakech1,
+    images: [marrakech1, marrakech2, marrakech3, marrakech4, marrakech5, marrakech6],
     activities: ['boating', 'city tour'],
     details: [
       { day: 1, title: 'Arrivée à Marrakech & Médina', description: 'Installation à votre riad, puis visite guidée de la médina, de la place Jemaa el-Fna et des souks animés. Dîner libre.' },
@@ -21,7 +63,8 @@ export const programsData = [
     destination: 'Maroc',
     duration: '8 Jours / 6 Nuits',
     price: '350',
-    image: 'https://images.unsplash.com/photo-1605714323596-13ce3b091058?q=80&w=2070&auto=format&fit=crop',
+    image: dakhla1,
+    images: [dakhla1, dakhla2, dakhla3, dakhla4, dakhla5],
     activities: ['kitesurf', 'dune blanche', 'source thermale'],
     details: [
       { day: 1, title: 'Arrivée à Dakhla & Installation', description: 'Installation à votre hôtel. Journée libre pour vous détendre ou explorer les environs.' },
@@ -42,7 +85,8 @@ export const programsData = [
     destination: 'Maroc',
     duration: '4 Jours / 2 Nuits',
     price: '125',
-    image: 'https://images.unsplash.com/photo-1623662755737-90f14d4c9b6a?q=80&w=2070&auto=format&fit=crop',
+    image: agadir1,
+    images: [agadir1, agadir2, agadir3, agadir4, agadir5],
     activities: ['plage', 'souk', 'surf'],
     details: [
       { day: 1, title: 'Arrivée à Agadir & Plage', description: 'Installation à l\'hôtel et après-midi libre pour profiter de la plage et de la promenade en bord de mer.' },
@@ -54,3 +98,5 @@ export const programsData = [
     category: 'national'
   }
 ];
+
+export const programsData = programs.map(p => ({ ...p, availability: generateRandomAvailability() }));
