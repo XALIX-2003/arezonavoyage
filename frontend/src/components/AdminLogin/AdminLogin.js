@@ -27,6 +27,7 @@ function AdminLogin() {
       if (response.ok) {
         if (data.is_admin) {
           localStorage.setItem('is_admin', 'true');
+          localStorage.setItem('username', username); // Ajout de cette ligne
           navigate('/admin/dashboard');
         } else {
           setError('You are not authorized to access the admin panel.');

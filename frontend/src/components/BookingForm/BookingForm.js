@@ -26,7 +26,8 @@ function BookingForm() {
       programTitle: program.title,
       selectedDate,
       travelers,
-      specificRequest
+      specificRequest,
+      price: program.price ? parseFloat(program.price) : null
     };
 
     try {
