@@ -1,108 +1,237 @@
 import React, { useState, useEffect, useCallback } from 'react';
-
-const API_URL = 'http://127.0.0.1:5000';
-
-// Un petit composant pour gérer les dates d'un programme
-function DateManager({ programme, username, onUpdate }) {
-  const [newDate, setNewDate] = useState('');
-
-  const handleAddDate = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await fetch(`${API_URL}/api/admin/programmes/${programme.id}/dates?username=${username}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: newDate })
-      });
-      if (!response.ok) throw new Error('Failed to add date');
-      setNewDate('');
-      onUpdate(); // Rafraîchir les données du composant parent
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  const handleDeleteDate = async (dateId) => {
-    if (!window.confirm('Supprimer cette date ?')) return;
-    try {
-      const response = await fetch(`${API_URL}/api/admin/available_dates/${dateId}?username=${username}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete date');
-      onUpdate(); // Rafraîchir
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  return (
-    <div className="mt-3 ps-3 border-start">
-      <h6>Dates disponibles</h6>
-      <ul className="list-unstyled">
-        {programme.available_dates.map(d => (
-          <li key={d.id} className="d-flex justify-content-between align-items-center mb-1">
-            <span>{new Date(d.date).toLocaleDateString()}</span>
-            <button className="btn btn-xs btn-outline-danger" onClick={() => handleDeleteDate(d.id)}>X</button>
-          </li>
-        ))}
-      </ul>
-      <form onSubmit={handleAddDate} className="d-flex">
-        <input type="date" className="form-control form-control-sm me-2" value={newDate} onChange={e => setNewDate(e.target.value)} required />
-        <button type="submit" className="btn btn-sm btn-success">+</button>
-      </form>
-    </div>
-  )
-}
+import ProgrammeEditor from './ProgrammeEditor';
+import {
+    getAdminDestinationDetails,
+    getImagesForDestination,
+    getProgrammesForDestination,
+    createProgramme,
+    deleteProgramme,
+    updateDestination,
+    deleteImage,
+    addImageToDestination
+} from '../../api';
 
 function DestinationDetail({ destinationId, onBack }) {
-  // ... (états existants pour programmes, images, etc.)
-  const [programmes, setProgrammes] = useState([]);
+  const [destination, setDestination] = useState(null);
   const [images, setImages] = useState([]);
+  const [programmes, setProgrammes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newImageFile, setNewImageFile] = useState(null);
-  const username = localStorage.getItem('username');
+
+  const [editingProgramme, setEditingProgramme] = useState(null);
+  const [newProgrammeTitle, setNewProgrammeTitle] = useState('');
+  const [newProgrammePrice, setNewProgrammePrice] = useState('');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isUpdatingDest, setIsUpdatingDest] = useState(false);
 
   const fetchData = useCallback(async () => {
-    // ... (logique de fetch existante)
-  }, [destinationId, username]);
+    setLoading(true);
+    try {
+      const [destData, imagesData, progData] = await Promise.all([
+        getAdminDestinationDetails(destinationId),
+        getImagesForDestination(destinationId),
+        getProgrammesForDestination(destinationId),
+      ]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+      setDestination(destData);
+      setImages(imagesData);
+      setProgrammes(progData);
+      setName(destData.name);
+      setDescription(destData.description);
 
-  // ... (tous les gestionnaires d'événements existants)
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [destinationId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleProgrammeSave = () => {
+    setEditingProgramme(null);
+    fetchData();
+  };
+
+  const handleAddProgramme = async (e) => {
+    e.preventDefault();
+    try {
+        await createProgramme({ 
+            title: newProgrammeTitle,
+            price: parseFloat(newProgrammePrice) || 0,
+            destination_id: destinationId
+        });
+        setNewProgrammeTitle('');
+        setNewProgrammePrice('');
+        fetchData();
+    } catch (err) {
+        setError(err.message);
+    }
+  };
+
+  const handleDeleteProgramme = async (progId) => {
+    if (!window.confirm('Are you sure?')) return;
+    try {
+        await deleteProgramme(progId);
+        fetchData();
+    } catch (err) {
+        setError(err.message);
+    }
+  };
+
+  const handleDetailsUpdate = async (e) => {
+    e.preventDefault();
+    setIsUpdatingDest(true);
+    try {
+      await updateDestination(destinationId, { name, description });
+      alert('Details updated!');
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsUpdatingDest(false);
+    }
+  };
+
+  const handleImageDelete = async (imageId) => {
+    if (!window.confirm('Are you sure?')) return;
+    try {
+      await deleteImage(imageId);
+      fetchData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleNewImagesUpload = async (e) => {
+    e.preventDefault();
+    const files = e.target.elements.newImages.files;
+    if (!files || files.length === 0) {
+        alert('Please select one or more files to upload.');
+        return;
+    }
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('images', files[i]);
+    }
+
+    try {
+      await addImageToDestination(destinationId, formData);
+      e.target.reset(); // Reset the form, clearing the file input
+      fetchData(); // Refresh data
+    } catch (err) {
+      setError(err.message);
+      alert(`Upload Error: ${err.message}`);
+    }
+  };
+
+  if (loading) return <div>Loading details...</div>;
+  if (error) return <div className="alert alert-danger">Error: {error} <button onClick={onBack} className="btn btn-secondary">Back</button></div>;
+  if (!destination) return <div>No destination found. <button onClick={onBack} className="btn btn-secondary">Back</button></div>;
 
   return (
     <div>
-      <button className="btn btn-link mb-3" onClick={onBack}>&larr; Retour à la liste</button>
-      <h1>Gestion de la Destination</h1>
-      <hr />
-
-      {/* Section pour les Programmes */}
-      <div className="card mt-4">
-        <div className="card-header">Programmes</div>
+      <button onClick={onBack} className="btn btn-secondary mb-4">← Back to List</button>
+      <h2>Manage: {destination.name}</h2>
+      
+      <div className="card mb-4">
+        <div className="card-header">Edit Details</div>
         <div className="card-body">
-          {/* ... (formulaire d'ajout de programme) ... */}
+          <form onSubmit={handleDetailsUpdate}>
+            <div className="mb-3">
+              <label htmlFor="destName" className="form-label">Name</label>
+              <input type="text" id="destName" className="form-control" value={name} onChange={e => setName(e.target.value)} />
+            </div>
+            <div className="mb-3">
+              <label htmlFor="destDesc" className="form-label">Description</label>
+              <textarea id="destDesc" className="form-control" rows="4" value={description} onChange={e => setDescription(e.target.value)}></textarea>
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={isUpdatingDest}>{isUpdatingDest ? 'Saving...' : 'Save Changes'}</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="card mb-4">
+        <div className="card-header">Manage Images</div>
+        <div className="card-body">
+          <h5>Existing Images</h5>
+          <div className="d-flex flex-wrap mb-3">
+            {images.map(img => (
+              <div key={img.id} className="position-relative m-2" style={{width: '150px', height: '100px'}}>
+                <img src={`http://127.0.0.1:5000${img.url}`} alt="" className="img-fluid rounded" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+                <button onClick={() => handleImageDelete(img.id)} className="btn btn-danger btn-sm position-absolute top-0 end-0" style={{lineHeight: '1', padding: '0.1rem 0.3rem'}}>×</button>
+              </div>
+            ))}
+          </div>
           <hr/>
-          <h5 className="card-title">Programmes existants</h5>
-          <ul className="list-group">
-            {programmes.map(p => (
-              <li key={p.id} className="list-group-item">
-                <div className="d-flex justify-content-between align-items-start">
-                  <div><strong>{p.title}</strong> - {p.price ? `${p.price} €` : 'Prix non défini'}<br/><small>{p.description}</small></div>
-                  <button className="btn btn-sm btn-outline-danger">Supprimer</button>
-                </div>
-                <DateManager programme={p} username={username} onUpdate={fetchData} />
+          <h5>Add New Images</h5>
+          <form onSubmit={handleNewImagesUpload}>
+            <div className="mb-3">
+              <input type="file" id="newImages" name="newImages" className="form-control" multiple />
+            </div>
+            <button type="submit" className="btn btn-success">Upload</button>
+          </form>
+        </div>
+      </div>
+
+      <div className="card mt-4">
+        <div className="card-header"><h4>Manage Programmes</h4></div>
+        <div className="card-body">
+          <ul className="list-group list-group-flush">
+            {programmes.map(prog => (
+              <li key={prog.id} className="list-group-item">
+                {editingProgramme?.id === prog.id ? (
+                  <ProgrammeEditor 
+                    programme={prog} 
+                    onSave={handleProgrammeSave} 
+                    onCancel={() => setEditingProgramme(null)} 
+                  />
+                ) : (
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <strong>{prog.title}</strong>
+                      <br />
+                      <span className="text-muted">Price: {prog.price} €</span>
+                    </div>
+                    <div>
+                      <button className="btn btn-sm btn-outline-primary me-2" onClick={() => setEditingProgramme(prog)}>Edit</button>
+                      <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteProgramme(prog.id)}>Delete</button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
         </div>
+        <div className="card-footer">
+            <h5>Add New Programme</h5>
+            <form onSubmit={handleAddProgramme}>
+                <div className="input-group">
+                    <input 
+                        type="text" 
+                        className="form-control" 
+                        placeholder="New programme title" 
+                        value={newProgrammeTitle} 
+                        onChange={e => setNewProgrammeTitle(e.target.value)} 
+                        required 
+                    />
+                    <input 
+                        type="number" 
+                        className="form-control" 
+                        placeholder="Price (€)" 
+                        value={newProgrammePrice} 
+                        onChange={e => setNewProgrammePrice(e.target.value)} 
+                        required 
+                    />
+                    <button className="btn btn-success" type="submit">Add</button>
+                </div>
+            </form>
+        </div>
       </div>
-
-      {/* Section pour les Photos */}
-      {/* ... (logique existante pour les photos) ... */}
     </div>
   );
 }

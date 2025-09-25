@@ -1,36 +1,59 @@
-import React from 'react';
-
-const activities = [
-  {
-    id: 1,
-    title: 'Boating (Balade en bateau)',
-    description: 'Profitez d\'une excursion relaxante sur l\'eau. Que ce soit sur un lac serein ou le long de la côte, nos balades en bateau offrent des vues spectaculaires et un moment de détente inoubliable.',
-    image: 'https://images.unsplash.com/photo-1516496791193-629e4a7f435b?q=80&w=2070&auto=format&fit=crop' // Placeholder image
-  },
-  {
-    id: 2,
-    title: 'City Tour (Visite de la ville)',
-    description: 'Découvrez les secrets les mieux gardés de nos destinations avec un guide local expert. Explorez les monuments historiques, les marchés animés et la culture authentique de chaque ville.',
-    image: 'https://images.unsplash.com/photo-1569926333394-21686c5132a2?q=80&w=2070&auto=format&fit=crop' // Placeholder image
-  }
-];
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 function Activites() {
+  const [programmes, setProgrammes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProgrammes = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/programmes');
+        if (!response.ok) {
+          throw new Error('Failed to fetch programmes');
+        }
+        const data = await response.json();
+        setProgrammes(data);
+      } catch (error) {
+        console.error("Error fetching programmes:", error);
+        // Optionally, set an error state here
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProgrammes();
+  }, []);
+
+  if (loading) {
+    return <div className="text-center">Loading...</div>;
+  }
+
   return (
     <div>
-      <h1 className="text-center mb-5">Les Activités Proposées</h1>
+      <h1 className="text-center mb-5">Tous Nos Programmes</h1>
       <div className="row g-4">
-        {activities.map(activity => (
-          <div key={activity.id} className="col-md-6">
-            <div className="card h-100 shadow-sm">
-              <img src={activity.image} className="card-img-top" alt={activity.title} style={{ height: '250px', objectFit: 'cover' }} />
-              <div className="card-body">
-                <h5 className="card-title">{activity.title}</h5>
-                <p className="card-text">{activity.description}</p>
+        {programmes.length > 0 ? (
+          programmes.map(programme => (
+            <div key={programme.id} className="col-md-6 col-lg-4">
+              <div className="card h-100 shadow-sm">
+                <img src={programme.image} className="card-img-top" alt={programme.title} style={{ height: '220px', objectFit: 'cover' }} />
+                <div className="card-body d-flex flex-column">
+                  <h5 className="card-title">{programme.title}</h5>
+                  <p className="card-text text-muted">{programme.destination_name}</p>
+                  <p className="card-text">{programme.description.substring(0, 100)}...</p>
+                  <div className="mt-auto">
+                    <Link to={`/programmes/${programme.id}`} className="btn btn-primary w-100">View Details</Link>
+                  </div>
+                </div>
               </div>
             </div>
+          ))
+        ) : (
+          <div className="col-12">
+            <p className="text-center">Aucun programme disponible pour le moment.</p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

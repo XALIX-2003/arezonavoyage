@@ -120,8 +120,14 @@ function BookingForm() {
             </div>
         </div>
         
-        <button type="submit" className="btn btn-primary btn-lg w-100">
-          Confirmer la réservation
+        {error && (
+          <div className="alert alert-danger mt-3">
+            <strong>Erreur :</strong> {error}
+          </div>
+        )}
+        
+        <button type="submit" className="btn btn-primary btn-lg w-100" disabled={isSubmitting}>
+          {isSubmitting ? 'Confirmation en cours...' : 'Confirmer la réservation'}
         </button>
       </form>
     </div>

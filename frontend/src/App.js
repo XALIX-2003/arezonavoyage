@@ -8,8 +8,10 @@ import Home from './components/Home/Home';
 import Programmes from './components/Programmes/Programmes';
 import Activites from './components/Activites/Activites';
 import Hotels from './components/Hotels/Hotels';
+import HotelDetail from './components/HotelDetail/HotelDetail';
 import About from './components/About/About';
 import ProgramDetail from './components/ProgramDetail/ProgramDetail';
+import DestinationDetail from './components/ProgramDetail/DestinationDetail';
 import BookingForm from './components/BookingForm/BookingForm';
 import ThankYou from './components/ThankYou/ThankYou';
 import AdminLogin from './components/AdminLogin/AdminLogin';
@@ -25,8 +27,10 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/programmes" element={<Programmes />} />
             <Route path="/programmes/:id" element={<ProgramDetail />} />
+            <Route path="/destinations/:id" element={<DestinationDetail />} />
             <Route path="/activites" element={<Activites />} />
             <Route path="/hotels" element={<Hotels />} />
+            <Route path="/hotels/:id" element={<HotelDetail />} />
             <Route path="/about" element={<About />} />
             <Route path="/booking" element={<BookingForm />} />
             <Route path="/thank-you" element={<ThankYou />} />

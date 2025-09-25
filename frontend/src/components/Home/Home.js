@@ -1,144 +1,178 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import './Home.css';
-import { programsData } from '../../data';
 import ProgramCard from '../ProgramCard/ProgramCard';
-import Calendar from '../Calendar/Calendar';
-
-const heroImages = programsData.map(p => p.image);
+import { getProgrammes, getDestinations } from '../../api';
 
 function Home() {
-  const featuredPrograms = programsData.slice(0, 3);
-  const [selectedProgramId, setSelectedProgramId] = useState('');
-  const [showCalendar, setShowCalendar] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState('');
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const navigate = useNavigate();
+  const [allProgrammes, setAllProgrammes] = useState([]); // Store all programs
+  const [displayedProgrammes, setDisplayedProgrammes] = useState([]); // Programs to display
+  const [destinations, setDestinations] = useState([]);
+  const [heroImages, setHeroImages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState(''); // New state for search term
+  const [selectedDate, setSelectedDate] = useState('');
+  const [destinationNames, setDestinationNames] = useState([]); // New state for unique destination names
+  const BACKEND_URL = 'http://127.0.0.1:5000';
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % heroImages.length);
-    }, 5000); // Change image every 5 seconds
-    return () => clearInterval(timer);
+    const fetchData = async () => {
+      try {
+        const [programmesData, destinationsData] = await Promise.all([
+            getProgrammes(),
+            getDestinations()
+        ]);
+
+        setAllProgrammes(programmesData);
+        setDisplayedProgrammes(programmesData);
+        setDestinations(destinationsData);
+
+        const uniqueDestinationNames = [...new Set(programmesData.map(prog => prog.destination_name))].filter(Boolean);
+        setDestinationNames(uniqueDestinationNames);
+
+        let combinedImages = [];
+        combinedImages = combinedImages.concat(programmesData.map(prog => prog.image).filter(Boolean));
+        destinationsData.forEach(dest => {
+          if (dest.images && Array.isArray(dest.images)) {
+            combinedImages = combinedImages.concat(dest.images);
+          }
+        });
+        
+        const uniqueCombinedImages = [...new Set(combinedImages)];
+        const shuffledImages = uniqueCombinedImages.sort(() => 0.5 - Math.random());
+        
+        setHeroImages(shuffledImages.length > 0 ? shuffledImages : [`${BACKEND_URL}/uploads/placeholder.png`]);
+
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        setHeroImages([`${BACKEND_URL}/uploads/placeholder.png`]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (selectedProgramId && selectedDate) {
-      const selectedProgram = programsData.find(p => p.id === parseInt(selectedProgramId));
-      navigate('/booking', { 
-        state: { 
-          program: selectedProgram, 
-          selectedDate: `${selectedDate.day}/${selectedDate.month + 1}/${selectedDate.year}`,
-          travelerCount: 1
-        }
-      });
-    } else if (selectedProgramId) {
-      navigate(`/programmes/${selectedProgramId}`);
-    }
-  };
+  useEffect(() => {
+    const filtered = allProgrammes.filter(prog => {
+      const matchesSearchTerm = !searchTerm || 
+                                (prog.destination_name && prog.destination_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                                (prog.title && prog.title.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesDate = !selectedDate || (prog.available_dates && prog.available_dates.includes(selectedDate));
+      return matchesSearchTerm && matchesDate;
+    });
+    setDisplayedProgrammes(filtered);
+  }, [searchTerm, selectedDate, allProgrammes]);
 
-  const handleDestinationChange = (e) => {
-    const programId = e.target.value;
-    setSelectedProgramId(programId);
-    setSelectedDate(null); // Reset date when destination changes
-    if (programId) {
-      const program = programsData.find(p => p.id === parseInt(programId));
-      setSelectedMonth(Object.keys(program.availability)[0]);
-    }
-  };
 
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    setShowCalendar(false);
-  };
-
-  const selectedProgram = selectedProgramId ? programsData.find(p => p.id === parseInt(selectedProgramId)) : null;
+  const featuredProgrammes = displayedProgrammes.slice(0, 3);
 
   return (
     <div>
-      <section className="hero-section" style={{backgroundImage: `url(${heroImages[currentImageIndex]})`}}>
-        <div className="hero-content text-center text-white">
-          <Link to="/programmes" className="btn btn-primary btn-lg mt-3">Voir nos programmes</Link>
-        </div>
+      <section className="hero-section">
+        {loading ? (
+          <div className="hero-content text-center"><h2>Loading...</h2></div>
+        ) : (
+          <div id="homeHeroCarousel" className="carousel slide" data-bs-ride="carousel">
+            <div className="carousel-indicators">
+              {heroImages.map((_, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  data-bs-target="#homeHeroCarousel"
+                  data-bs-slide-to={index}
+                  className={index === 0 ? 'active' : ''}
+                  aria-current={index === 0 ? 'true' : 'false'}
+                  aria-label={`Slide ${index + 1}`}
+                ></button>
+              ))}
+            </div>
+            <div className="carousel-inner">
+              {heroImages.map((imgUrl, index) => (
+                <div key={index} className={`carousel-item ${index === 0 ? 'active' : ''}`}>
+                  <div className="hero-image" style={{backgroundImage: `url(${BACKEND_URL}${imgUrl})`}}></div>
+                  <div className="hero-content text-center text-white">
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="carousel-control-prev" type="button" data-bs-target="#homeHeroCarousel" data-bs-slide="prev">
+              <span className="carousel-control-prev-icon" aria-hidden="true"></span>
+              <span className="visually-hidden">Previous</span>
+            </button>
+            <button className="carousel-control-next" type="button" data-bs-target="#homeHeroCarousel" data-bs-slide="next">
+              <span className="carousel-control-next-icon" aria-hidden="true"></span>
+              <span className="visually-hidden">Next</span>
+            </button>
+          </div>
+        )}
       </section>
 
-      <section className="search-section py-5">
+      <section className="search-section py-5 text-center">
         <div className="container">
-          <div className="row justify-content-center">
-            <div className="col-md-10">
-              <form className="search-form p-4 rounded shadow-sm bg-white" onSubmit={handleSearch}>
-                <div className="row g-3 align-items-end">
-                  <div className="col-md-8">
-                    <label htmlFor="destination" className="form-label fw-bold">Destination</label>
-                    <div className="input-group">
-                      <select className="form-select" id="destination" value={selectedProgramId} onChange={handleDestinationChange}>
-                        <option value="">Choisissez une destination</option>
-                        {programsData.map(program => (
-                          <option key={program.id} value={program.id}>{program.title}</option>
-                        ))}
-                      </select>
-                      <button 
-                        className="btn btn-outline-secondary" 
-                        type="button" 
-                        onClick={() => setShowCalendar(true)} 
-                        disabled={!selectedProgramId}>
-                        📅
-                      </button>
+            <h2 className="mb-4">Find Your Perfect Programme</h2>
+            <div className="row justify-content-center">
+                <div className="col-md-8">
+                    <div className="input-group mb-3">
+                        <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Search by destination or program name..."
+                            list="destination-suggestions"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        <datalist id="destination-suggestions">
+                            {destinationNames.map((name, index) => (
+                                <option key={index} value={name} />
+                            ))}
+                        </datalist>
+                        <input 
+                            type="date" 
+                            className="form-control" 
+                            value={selectedDate} 
+                            onChange={(e) => setSelectedDate(e.target.value)} 
+                        />
                     </div>
-                  </div>
-                  <div className="col-md-4">
-                    <button type="submit" className="btn btn-primary w-100" disabled={!selectedProgramId || !selectedDate}>
-                      {selectedDate ? 'Réserver' : 'Rechercher'}
-                    </button>
-                  </div>
                 </div>
-              </form>
             </div>
-          </div>
+            <p className="lead">Or explore all our programmes below.</p>
+            <Link to="/programmes" className="btn btn-orange btn-lg">View All Programmes</Link>
         </div>
       </section>
-
-      {showCalendar && selectedProgram && (
-        <div className="modal show d-block" tabIndex="-1">
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">Disponibilité pour {selectedProgram.title}</h5>
-                <button type="button" className="btn-close" onClick={() => setShowCalendar(false)}></button>
-              </div>
-              <div className="modal-body">
-                <div className="mb-3">
-                  <label htmlFor="monthSelect" className="form-label">Choisissez un mois</label>
-                  <select className="form-select" id="monthSelect" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
-                    {Object.keys(selectedProgram.availability).map(month => (
-                      <option key={month} value={month}>{month}</option>
-                    ))}
-                  </select>
-                </div>
-                <Calendar 
-                  availability={selectedProgram.availability} 
-                  selectedMonth={selectedMonth} 
-                  onDateSelect={handleDateSelect} 
-                  selectedDate={selectedDate} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <section className="container my-5">
-        <h2 className="text-center mb-4">Nos programmes populaires</h2>
+        <h2 className="text-center mb-4">Our Destinations</h2>
         <div className="row">
-          {featuredPrograms.map(program => (
-            <div key={program.id} className="col-lg-4 col-md-6 mb-4">
-              <ProgramCard program={program} />
+          {destinations.map(dest => (
+            <div key={dest.id} className="col-lg-4 col-md-6 mb-4">
+                <div className="card h-100 shadow-sm">
+                    <img src={`${BACKEND_URL}${dest.image}`} className="card-img-top" alt={dest.name} />
+                    <div className="card-body d-flex flex-column">
+                        <h5 className="card-title">{dest.name}</h5>
+                        <p className="card-text text-muted">{dest.description?.substring(0, 120)}...</p>
+                        <div className="mt-auto">
+                            <Link to={`/destinations/${dest.id}`} className="btn btn-primary w-100">View Destination</Link>
+                        </div>
+                    </div>
+                </div>
             </div>
           ))}
         </div>
-        <div className="text-center">
-            <Link to="/programmes" className="btn btn-outline-primary mt-3">Voir tous les programmes</Link>
+      </section>
+
+      <section className="container my-5">
+        <h2 className="text-center mb-4">Popular Programmes</h2>
+        <div className="row">
+          {displayedProgrammes.length > 0 ? (
+            displayedProgrammes.slice(0, 3).map(prog => (
+              <div key={prog.id} className="col-lg-4 col-md-6 mb-4">
+                <ProgramCard program={prog} />
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-muted">No programmes found matching your criteria.</p>
+          )}
         </div>
       </section>
     </div>

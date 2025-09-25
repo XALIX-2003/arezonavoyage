@@ -1,148 +1,164 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { programsData } from '../../data';
-import Calendar from '../Calendar/Calendar';
-import './ProgramDetail.css';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getProgrammeDetails, bookProgram } from '../../api';
+
+// --- Reusable Booking Form Component ---
+const BookingForm = ({ program, onBooking }) => {
+    const [selectedDate, setSelectedDate] = useState('');
+    const [travelerCount, setTravelerCount] = useState(1);
+    const [travelers, setTravelers] = useState([]);
+    const [step, setStep] = useState('select');
+
+    const handleProceed = () => {
+        if (!selectedDate) { alert('Please select a date.'); return; }
+        setTravelers(Array.from({ length: travelerCount }, () => ({ nom: '', prenom: '', email: '', telephone: '' })));
+        setStep('fillInfo');
+    };
+
+    const handleTravelerChange = (index, event) => {
+        const newTravelers = [...travelers];
+        newTravelers[index][event.target.name] = event.target.value;
+        setTravelers(newTravelers);
+    };
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        const bookingData = {
+            programTitle: program.title,
+            selectedDate,
+            travelers,
+            price: program.price
+        };
+        onBooking(bookingData);
+    };
+
+    if (step === 'select') {
+        return (
+            <div className="row p-3 bg-light rounded mt-3">
+                <div className="col-md-6 mb-2"><label>Date</label><select className="form-select" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}><option value="">Select a date</option>{program.available_dates.map(date => <option key={date} value={date}>{new Date(date).toLocaleDateString('fr-FR')}</option>)}</select></div>
+                <div className="col-md-6 mb-2"><label>Travelers</label><input type="number" className="form-control" min="1" value={travelerCount} onChange={e => setTravelerCount(parseInt(e.target.value, 10))} /></div>
+                <div className="col-12"><button className="btn btn-primary w-100" onClick={handleProceed} disabled={!selectedDate}>Fill Traveler Info</button></div>
+            </div>
+        );
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="p-3 bg-light rounded mt-3">
+            <p>Booking for {travelerCount} on {new Date(selectedDate).toLocaleDateString('fr-FR')}</p>
+            {travelers.map((_, index) => (
+                <div key={index} className="row g-2 mb-2 border p-2 rounded">
+                    <h6 className="col-12">Traveler {index + 1}</h6>
+                    <div className="col-md-6"><input type="text" name="nom" placeholder="Last Name" className="form-control" required onChange={e => handleTravelerChange(index, e)} /></div>
+                    <div className="col-md-6"><input type="text" name="prenom" placeholder="First Name" className="form-control" required onChange={e => handleTravelerChange(index, e)} /></div>
+                    <div className="col-md-6"><input type="email" name="email" placeholder="Email" className="form-control" required onChange={e => handleTravelerChange(index, e)} /></div>
+                    <div className="col-md-6"><input type="tel" name="telephone" placeholder="Phone" className="form-control" required onChange={e => handleTravelerChange(index, e)} /></div>
+                </div>
+            ))}
+            <button type="submit" className="btn btn-success">Confirm Booking</button>
+            <button type="button" className="btn btn-outline-secondary ms-2" onClick={() => setStep('select')}>Back</button>
+        </form>
+    );
+};
 
 function ProgramDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
-  const program = programsData.find(p => p.id === parseInt(id));
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [program, setProgram] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [openBookingForm, setOpenBookingForm] = useState(false);
+    const BACKEND_URL = 'http://127.0.0.1:5000';
 
-  const [selectedDate, setSelectedDate] = useState(program ? program.availableDates[0] : '');
-  const [travelerCount, setTravelerCount] = useState(1);
-  const [activeTab, setActiveTab] = useState('program');
-  const [selectedMonth, setSelectedMonth] = useState(program ? Object.keys(program.availability)[0] : '');
-  const [currentImg, setCurrentImg] = useState(0);
+    useEffect(() => {
+        const fetchProgrammeDetails = async () => {
+            try {
+                const data = await getProgrammeDetails(id);
+                setProgram(data);
+            } catch (err) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProgrammeDetails();
+    }, [id]);
 
-  useEffect(() => {
-    if (program && program.images && program.images.length > 1) {
-      const timer = setInterval(() => {
-        setCurrentImg((prevImg) => (prevImg + 1) % program.images.length);
-      }, 3000); // Change image every 3 seconds
-      return () => clearInterval(timer);
-    }
-  }, [program]);
+    const handleBooking = async (bookingData) => {
+        try {
+            await bookProgram(bookingData);
+            navigate('/thank-you');
+        } catch (err) {
+            alert(`Booking Error: ${err.message}`);
+        }
+    };
 
-  if (!program) {
+    if (loading) return <div className="text-center p-5">Loading...</div>;
+    if (error) return <div className="alert alert-danger">Error: {error}</div>;
+    if (!program) return <div className="text-center p-5">Program not found.</div>;
+
     return (
-        <div className="text-center">
-            <h2>Programme non trouvé</h2>
-            <Link to="/programmes">Retourner à la liste des programmes</Link>
+        <div className="container-fluid px-0">
+            {/* Program Image */}
+            {program.image && (
+                <div style={{ height: '60vh', background: `url(${BACKEND_URL}${program.image}) center center / cover no-repeat` }} />
+            )}
+
+            <div className="container py-5">
+                <div className="text-center mb-5">
+                    <h1>{program.title}</h1>
+                    <p className="lead">{program.description}</p>
+                    {program.price && <h2>{program.price}€</h2>}
+                </div>
+
+                {/* Program Details */}
+                <section className="my-5">
+                    <h2 className="mb-4 text-center">Day by Day Itinerary</h2>
+                    {program.program_days && program.program_days.length > 0 ? (
+                        program.program_days.map(day => (
+                            <div key={day.day_number} className="mb-3">
+                                <strong>Day {day.day_number}: {day.title}</strong>
+                                <p>{day.description}</p>
+                            </div>
+                        ))
+                    ) : (
+                        <p>No itinerary available for this program.</p>
+                    )}
+                </section>
+
+                {/* Hotels for this Programme */}
+                {program.hotels && program.hotels.length > 0 && (
+                    <section className="my-5">
+                        <h2 className="mb-4 text-center">Hotels for this Programme</h2>
+                        <div className="row">
+                            {program.hotels.map(hotel => (
+                                <div key={hotel.id} className="col-md-6 mb-3">
+                                    <div className="card h-100">
+                                        {hotel.image ? (
+                                            <img src={`${BACKEND_URL}${hotel.image}`} className="card-img-top" alt={hotel.name} style={{ height: '150px', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div className="card-img-top bg-light d-flex align-items-center justify-content-center" style={{ height: '150px' }}><small>No image</small></div>
+                                        )}
+                                        <div className="card-body">
+                                            <h6 className="card-title">{hotel.name}</h6>
+                                            <p className="card-text text-muted">{hotel.description?.substring(0, 80)}...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* Booking Section */}
+                <section className="my-5 text-center">
+                    <button className="btn btn-primary btn-lg" onClick={() => setOpenBookingForm(!openBookingForm)}>
+                        {openBookingForm ? 'Cancel' : 'Book This Programme'}
+                    </button>
+                    {openBookingForm && <BookingForm program={program} onBooking={handleBooking} />}
+                </section>
+            </div>
         </div>
     );
-  }
-
-  const handleBooking = () => {
-    navigate('/booking', {
-        state: {
-            program,
-            selectedDate,
-            travelerCount
-        }
-    });
-  };
-
-  return (
-    <div className="program-detail-container">
-        <div className="row">
-            <div className="col-md-8">
-                <div className="program-detail-image-wrapper mb-4">
-                  {program.images && program.images.length > 1 ? (
-                    <div className="program-carousel">
-                      <img src={program.images[currentImg]} className="img-fluid rounded" alt={program.title} />
-                      <div className="carousel-controls">
-                        <button
-                          className="carousel-btn"
-                          onClick={() => setCurrentImg((currentImg - 1 + program.images.length) % program.images.length)}
-                          aria-label="Image précédente"
-                        >&#8592;</button>
-                        <span className="carousel-indicator">{currentImg + 1}/{program.images.length}</span>
-                        <button
-                          className="carousel-btn"
-                          onClick={() => setCurrentImg((currentImg + 1) % program.images.length)}
-                          aria-label="Image suivante"
-                        >&#8594;</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <img src={program.image} alt={program.title} className="img-fluid rounded" />
-                  )}
-                </div>
-                
-                <h1 className="mb-3">{program.title}</h1>
-                <p className="lead text-muted">{program.destination}</p>
-                <hr />
-
-                <ul className="nav nav-tabs mb-4">
-                  <li className="nav-item">
-                    <button className={`nav-link ${activeTab === 'program' ? 'active' : ''}`} onClick={() => setActiveTab('program')}>Programme</button>
-                  </li>
-                  <li className="nav-item">
-                    <button className={`nav-link ${activeTab === 'calendar' ? 'active' : ''}`} onClick={() => setActiveTab('calendar')}>Disponibilités</button>
-                  </li>
-                </ul>
-
-                {activeTab === 'program' && (
-                  <div className="timeline">
-                      {program.details.map((dayDetail, index) => (
-                          <div className="timeline-item" key={index}>
-                              <div className="timeline-marker">Jour {dayDetail.day}</div>
-                              <div className="timeline-content card shadow-sm mb-3">
-                                  <div className="card-body">
-                                      <h5 className="card-title">{dayDetail.title}</h5>
-                                      <ul className="card-text">
-                                          {dayDetail.description.split('. ').map((sentence, i) => (
-                                              sentence && <li key={i}>{sentence}</li>
-                                          ))}
-                                      </ul>
-                                  </div>
-                              </div>
-                          </div>
-                      ))}
-                  </div>
-                )}
-
-                {activeTab === 'calendar' && (
-                  <div>
-                    <div className="mb-3">
-                      <label htmlFor="monthSelect" className="form-label">Choisissez un mois</label>
-                      <select className="form-select" id="monthSelect" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
-                        {Object.keys(program.availability).map(month => (
-                          <option key={month} value={month}>{month}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <Calendar availability={program.availability} selectedMonth={selectedMonth} />
-                  </div>
-                )}
-
-            </div>
-            <div className="col-md-4">
-                <div className="booking-card p-4 rounded shadow-sm">
-                    <h3 className="mb-3">Réservez votre place</h3>
-                    <div className="mb-3">
-                        <span className="fs-2 fw-bold">{program.price} €</span>
-                        <span className="text-muted"> / personne</span>
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="dateSelect" className="form-label">Choisissez votre date de départ</label>
-                        <select className="form-select" id="dateSelect" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}>
-                            {program.availableDates.map(date => (
-                                <option key={date} value={date}>{date}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="mb-3">
-                        <label htmlFor="travelerCount" className="form-label">Nombre de voyageurs</label>
-                        <input type="number" className="form-control" id="travelerCount" value={travelerCount} onChange={e => setTravelerCount(parseInt(e.target.value))} min="1" />
-                    </div>
-                    <button className="btn btn-primary w-100 btn-lg" onClick={handleBooking}>Continuer</button>
-                </div>
-            </div>
-        </div>
-    </div>
-  );
 }
 
 export default ProgramDetail;

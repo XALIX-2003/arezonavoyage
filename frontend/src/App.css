@@ -1,5 +1,11 @@
+.text-orange {
+  color: #FF5733; /* You can adjust this hex code to your preferred shade of orange */
+}
+
 .App {
-  text-align: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 .App-logo {
@@ -35,4 +41,27 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Custom Orange Styles */
+.btn-orange {
+  background-color: #FF5733;
+  color: #fff;
+  border-color: #FF5733;
+}
+
+.btn-orange:hover {
+  background-color: #e64a2e;
+  color: #fff;
+  border-color: #d9442a;
+}
+
+.btn-outline-orange {
+  color: #FF5733;
+  border-color: #FF5733;
+}
+
+.btn-outline-orange:hover {
+  background-color: #FF5733;
+  color: #fff;
 }

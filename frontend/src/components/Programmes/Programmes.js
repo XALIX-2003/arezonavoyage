@@ -1,64 +1,48 @@
-import React from 'react';
-import { useLocation } from 'react-router-dom';
-import { programsData } from '../../data';
+import React, { useState, useEffect } from 'react';
 import ProgramCard from '../ProgramCard/ProgramCard';
+import { getProgrammes } from '../../api'; // Import the new API function
 
 function Programmes() {
-  const location = useLocation();
-  const filteredPrograms = location.state?.filteredPrograms;
+  const [programmes, setProgrammes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const nationalPrograms = programsData.filter(p => p.category === 'national');
-  const internationalPrograms = programsData.filter(p => p.category === 'international');
+  useEffect(() => {
+    const fetchProgrammes = async () => {
+      try {
+        const data = await getProgrammes();
+        setProgrammes(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  if (filteredPrograms) {
-    return (
-      <div>
-        <h2 className="text-center mb-4">Résultats de la recherche</h2>
-        <div className="row">
-          {filteredPrograms.length > 0 ? (
-            filteredPrograms.map(program => (
-              <div key={program.id} className="col-lg-4 col-md-6 mb-4">
-                <ProgramCard program={program} />
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-muted">Aucun programme ne correspond à votre recherche.</p>
-          )}
-        </div>
-      </div>
-    );
+    fetchProgrammes();
+  }, []);
+
+  if (loading) {
+    return <div className="text-center"><p>Loading programmes...</p></div>;
+  }
+
+  if (error) {
+    return <div className="alert alert-danger"><p>Error: {error}</p></div>;
   }
 
   return (
     <div>
-      <div className="mb-5">
-        <h2 className="text-center mb-4">Programmes Nationaux</h2>
-        <div className="row">
-          {nationalPrograms.length > 0 ? (
-            nationalPrograms.map(program => (
-              <div key={program.id} className="col-lg-4 col-md-6 mb-4">
-                <ProgramCard program={program} />
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-muted">Aucun programme national disponible pour le moment.</p>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="text-center mb-4">Programmes Internationaux</h2>
-        <div className="row">
-          {internationalPrograms.length > 0 ? (
-            internationalPrograms.map(program => (
-              <div key={program.id} className="col-lg-4 col-md-6 mb-4">
-                <ProgramCard program={program} />
-              </div>
-            ))
-          ) : (
-            <p className="text-center text-muted">Nos offres pour l'international seront bientôt disponibles.</p>
-          )}
-        </div>
+      <h2 className="text-center mb-4">Our Programmes</h2>
+      <div className="row">
+        {programmes.length > 0 ? (
+          programmes.map(prog => (
+            <div key={prog.id} className="col-lg-4 col-md-6 mb-4">
+              <ProgramCard program={prog} />
+            </div>
+          ))
+        ) : (
+          <p className="text-center text-muted">No programmes available at the moment.</p>
+        )}
       </div>
     </div>
   );

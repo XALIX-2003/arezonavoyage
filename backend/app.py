@@ -1,7 +1,9 @@
-
 # --- IMPORTS & INITIALISATION ---
 import os
-from flask import Flask, request, jsonify, send_from_directory
+import uuid
+from flask import Flask, request, jsonify, send_from_directory, send_file
+import io
+from openpyxl import Workbook
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -11,12 +13,24 @@ from sqlalchemy.orm import relationship
 
 # --- CONFIGURATION ---
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.abspath(os.path.join(os.path.dirname(__file__), 'instance/database.db'))
+
+# Ensure the instance folder exists
+instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+os.makedirs(instance_path, exist_ok=True)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(instance_path, 'database.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 
 db = SQLAlchemy(app)
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}}, supports_credentials=True)
+CORS(app, supports_credentials=True)
+
+class ProgramDay(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    day_number = db.Column(db.Integer, nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    programme_id = db.Column(db.Integer, db.ForeignKey('programme.id'), nullable=False)
 
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
@@ -44,19 +58,13 @@ class Programme(db.Model):
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Float, nullable=True)
     destination_id = db.Column(db.Integer, db.ForeignKey('destination.id'), nullable=False)
+    program_days = relationship('ProgramDay', backref='programme', lazy='dynamic', cascade="all, delete-orphan")
     available_dates = relationship('AvailableDate', backref='programme', lazy='dynamic', cascade="all, delete-orphan")
 
 class AvailableDate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.Date, nullable=False)
     programme_id = db.Column(db.Integer, db.ForeignKey('programme.id'), nullable=False)
-
-class Image(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    url = db.Column(db.String(255), nullable=False)
-    destination_id = db.Column(db.Integer, db.ForeignKey('destination.id'), nullable=True)
-    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id'), nullable=True)
-    hotel_id = db.Column(db.Integer, db.ForeignKey('hotel.id'), nullable=True)
 
 class Activity(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -65,11 +73,19 @@ class Activity(db.Model):
     destination_id = db.Column(db.Integer, db.ForeignKey('destination.id'), nullable=False)
     images = relationship('Image', backref='activity', lazy=True)
 
+class Image(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    url = db.Column(db.String(255), nullable=False)
+    destination_id = db.Column(db.Integer, db.ForeignKey('destination.id'), nullable=True)
+    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id'), nullable=True)
+    hotel_id = db.Column(db.Integer, db.ForeignKey('hotel.id'), nullable=True)
+
 class Hotel(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    destination_id = db.Column(db.Integer, db.ForeignKey('destination.id'), nullable=False)
+    programme_id = db.Column(db.Integer, db.ForeignKey('programme.id'), nullable=True)
+    programme = relationship('Programme', backref='hotels_in_programme')
     images = relationship('Image', backref='hotel', lazy=True)
 
 class Client(db.Model):
@@ -86,14 +102,12 @@ class Booking(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     program_title = db.Column(db.String(255), nullable=False)
     selected_date = db.Column(db.String(50), nullable=False)
-    travelers = db.Column(db.Text, nullable=False) # Store as JSON string
+    travelers = db.Column(db.Text, nullable=False)
     specific_request = db.Column(db.Text, nullable=True)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 # --- HELPERS ---
 def is_admin(request):
-    # TEMPORARY: This function is a security vulnerability and should be replaced with proper authentication.
-    # For now, we're making it always return True to test other functionalities.
     return True
 
 # --- ROUTES PUBLIQUES ---
@@ -101,13 +115,130 @@ def is_admin(request):
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
-# --- ROUTE DE RÉSERVATION ---
+# --- ROUTES PUBLIQUES (données) ---
+
+@app.route('/api/hotels/<int:hotel_id>', methods=['GET'])
+def get_public_hotel_detail(hotel_id):
+    hotel = Hotel.query.get_or_404(hotel_id)
+    images = [img.url for img in hotel.images]
+    return jsonify({
+        'id': hotel.id,
+        'name': hotel.name,
+        'description': hotel.description,
+        'images': images,
+        'programme_id': hotel.programme_id
+    })
+
+@app.route('/api/hotels', methods=['GET'])
+def get_public_hotels():
+    hotels = Hotel.query.all()
+    result = []
+    for h in hotels:
+        program_name = h.programme.title if h.programme else 'N/A'
+        destination_name = h.programme.destination.name if h.programme and h.programme.destination else 'N/A'
+        result.append({
+            'id': h.id,
+            'name': h.name,
+            'description': h.description,
+            'image': h.images[0].url if h.images else None,
+            'programme_id': h.programme_id,
+            'programme_name': program_name,
+            'destination_name': destination_name
+        })
+    return jsonify(result)
+
+@app.route('/api/destinations', methods=['GET'])
+def get_public_destinations():
+    destinations = Destination.query.all()
+    result = []
+    for d in destinations:
+        first_image = d.images.first()
+        image_url = first_image.url if first_image else None
+        result.append({
+            'id': d.id, 
+            'name': d.name, 
+            'description': d.description,
+            'image': image_url,
+            'images': [img.url for img in d.images.all()]
+        })
+    return jsonify(result)
+
+@app.route('/api/destinations/<int:dest_id>', methods=['GET'])
+def get_public_destination_detail(dest_id):
+    try:
+        destination = Destination.query.get_or_404(dest_id)
+        programmes = []
+        for p in destination.programmes.all():
+            try:
+                programmes.append({
+                    'id': p.id,
+                    'title': p.title,
+                    'description': p.description,
+                    'price': p.price,
+                    'program_days': [{'day_number': d.day_number, 'title': d.title, 'description': d.description} for d in p.program_days.order_by(ProgramDay.day_number).all()],
+                    'available_dates': [d.date.isoformat() for d in p.available_dates.order_by(AvailableDate.date).all() if d.date],
+                    'hotels': [{'id': h.id, 'name': h.name, 'description': h.description, 'image': h.images[0].url if h.images else None} for h in p.hotels_in_programme]
+                })
+            except Exception as e:
+                print(f"Error processing program {p.id}: {e}")
+        images = [img.url for img in destination.images.all()]
+        return jsonify({
+            'id': destination.id,
+            'name': destination.name,
+            'description': destination.description,
+            'images': images,
+            'programmes': programmes,
+        })
+    except Exception as e:
+        print(f"FATAL error on destination {dest_id}: {e}")
+        return jsonify({"error": "A fatal error occurred on the server."}), 500
+
+
+@app.route('/api/programmes', methods=['GET'])
+def get_public_programmes():
+    programmes = Programme.query.all()
+    result = []
+    for p in programmes:
+        dest_image = None
+        if p.destination and p.destination.images.first():
+            dest_image = p.destination.images.first().url
+        result.append({
+            'id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'price': p.price,
+            'destination_name': p.destination.name if p.destination else 'N/A',
+            'image': dest_image or '/uploads/placeholder.png',
+            'available_dates': [d.date.isoformat() for d in p.available_dates.order_by(AvailableDate.date).all() if d.date],
+            'hotels': [{'id': h.id, 'name': h.name, 'description': h.description, 'image': h.images[0].url if h.images else None} for h in p.hotels_in_programme]
+        })
+    return jsonify(result)
+
+@app.route('/api/programmes/<int:prog_id>', methods=['GET'])
+def get_public_programme_detail(prog_id):
+    programme = Programme.query.get_or_404(prog_id)
+    days = programme.program_days.order_by(ProgramDay.day_number).all()
+    dates = programme.available_dates.order_by(AvailableDate.date).all()
+    dest_image = None
+    if programme.destination and programme.destination.images.first():
+        dest_image = programme.destination.images.first().url
+    return jsonify({
+        'id': programme.id,
+        'title': programme.title,
+        'description': programme.description,
+        'price': programme.price,
+        'image': dest_image or '/uploads/placeholder.png',
+        'program_days': [{'day_number': d.day_number, 'title': d.title, 'description': d.description} for d in days],
+        'available_dates': [d.date.isoformat() for d in dates],
+        'hotels': [{'id': h.id, 'name': h.name, 'description': h.description, 'image': h.images[0].url if h.images else None} for h in programme.hotels_in_programme]
+    })
+
+
 @app.route('/api/book', methods=['POST', 'OPTIONS'])
 def book_program():
     if request.method == 'OPTIONS': return jsonify(status='ok')
     data = request.get_json()
     if not data: return jsonify({"error": "Invalid data"}), 400
-    
     travelers_data = data.get('travelers', [])
     destination = data.get('programTitle')
     prix = data.get('price')
@@ -143,43 +274,90 @@ def admin_login():
             return jsonify({"error": "User is not an admin.", "is_admin": False}), 403
     return jsonify({"error": "Invalid credentials", "is_admin": False}), 401
 
-@app.route('/api/admin/check_admin_status', methods=['GET'])
-def check_admin_status():
-    user = User.query.filter_by(username='admin').first()
-    if user:
-        return jsonify({"username": user.username, "is_admin": user.is_admin, "password_hash_exists": bool(user.password_hash)}), 200
-    else:
-        return jsonify({"message": "Admin user not found"}), 404
-
-@app.route('/api/debug/admin_user', methods=['GET'])
-def debug_admin_user():
-    user = User.query.filter_by(username='admin').first()
-    if user:
-        return jsonify({
-            "username": user.username,
-            "is_admin": user.is_admin,
-            "password_hash_exists": bool(user.password_hash),
-            "password_hash_value_for_debug": user.password_hash # For debugging, do NOT keep in production
-        }), 200
-    else:
-        return jsonify({"message": "Admin user not found in DB"}), 404
-
-@app.route('/api/admin/clients', methods=['GET', 'OPTIONS'])
-def get_clients():
-    if request.method == 'OPTIONS': return ('', 204)
+@app.route('/api/admin/destinations', methods=['GET'])
+def get_destinations():
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
-    clients = Client.query.all()
-    return jsonify([{'id': c.id, 'nom': c.nom, 'prenom': c.prenom, 'email': c.email, 'telephone': c.telephone, 'ville': c.ville} for c in clients])
+    destinations = Destination.query.all()
+    return jsonify([{'id': d.id, 'name': d.name, 'description': d.description} for d in destinations])
 
-@app.route('/api/admin/clients/<int:client_id>', methods=['DELETE', 'OPTIONS'])
-def delete_client(client_id):
-    if request.method == 'OPTIONS': return ('', 204)
+@app.route('/api/admin/destinations/<int:dest_id>', methods=['GET'])
+def get_destination_detail(dest_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
-    client = Client.query.get_or_404(client_id)
-    db.session.delete(client)
+    destination = Destination.query.get_or_404(dest_id)
+    return jsonify({
+        'id': destination.id,
+        'name': destination.name,
+        'description': destination.description
+    })
+
+@app.route('/api/admin/destinations', methods=['POST'])
+def create_destination():
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    name = request.form.get('name')
+    description = request.form.get('description')
+    if not name:
+        return jsonify({'error': 'Name is required'}), 400
+    new_dest = Destination(name=name, description=description)
+    db.session.add(new_dest)
+    files = request.files.getlist('images')
+    for file in files:
+        if file and file.filename:
+            ext = os.path.splitext(file.filename)[1]
+            unique_filename = f"{uuid.uuid4().hex}{ext}"
+            filename = secure_filename(unique_filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            url = f'/uploads/{filename}'
+            image = Image(url=url, destination_id=new_dest.id)
+            db.session.add(image)
     db.session.commit()
-    return jsonify(success=True)
+    return jsonify({'id': new_dest.id, 'name': new_dest.name}), 201
 
+@app.route('/api/admin/destinations/<int:dest_id>', methods=['PUT'])
+def update_destination(dest_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    destination = Destination.query.get_or_404(dest_id)
+    data = request.get_json()
+    destination.name = data.get('name', destination.name)
+    destination.description = data.get('description', destination.description)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/destinations/<int:dest_id>', methods=['DELETE'])
+def delete_destination(dest_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    destination = Destination.query.get_or_404(dest_id)
+    db.session.delete(destination)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/destinations/<int:dest_id>/images', methods=['POST'])
+def add_image_to_destination(dest_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    destination = Destination.query.get_or_404(dest_id)
+    files = request.files.getlist('images')
+    if not files:
+        return jsonify({'error': 'No images provided'}), 400
+    for file in files:
+        if file and file.filename:
+            ext = os.path.splitext(file.filename)[1]
+            unique_filename = f"{uuid.uuid4().hex}{ext}"
+            filename = secure_filename(unique_filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            url = f'/uploads/{filename}'
+            image = Image(url=url, destination_id=destination.id)
+            db.session.add(image)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/images/<int:image_id>', methods=['DELETE'])
+def delete_image(image_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    image = Image.query.get_or_404(image_id)
+    db.session.delete(image)
+    db.session.commit()
+    return jsonify({'success': True})
 
 @app.route('/api/admin/destinations/<int:dest_id>/programmes', methods=['GET'])
 def get_programmes_for_destination(dest_id):
@@ -189,12 +367,21 @@ def get_programmes_for_destination(dest_id):
     result = []
     for p in programmes:
         dates = p.available_dates.all()
+        hotels_data = []
+        for h in p.hotels_in_programme:
+            hotels_data.append({
+                'id': h.id,
+                'name': h.name,
+                'description': h.description,
+                'image': h.images[0].url if h.images else None
+            })
         result.append({
             'id': p.id, 
             'title': p.title, 
             'description': p.description, 
             'price': p.price,
-            'available_dates': [{'id': d.id, 'date': d.date.isoformat()} for d in dates]
+            'available_dates': [{'id': d.id, 'date': d.date.isoformat()} for d in dates],
+            'hotels': hotels_data
         })
     return jsonify(result)
 
@@ -204,15 +391,10 @@ def create_programme():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON data"}), 400
-    
     destination_id = data.get('destination_id')
     title = data.get('title')
-
-    if not destination_id:
-        return jsonify({"error": "destination_id is required"}), 400
-    if not title:
-        return jsonify({"error": "title is required"}), 400
-
+    if not destination_id or not title:
+        return jsonify({"error": "destination_id and title are required"}), 400
     prog = Programme(
         destination_id=destination_id, 
         title=title, 
@@ -223,6 +405,20 @@ def create_programme():
     db.session.commit()
     return jsonify({'id': prog.id}), 201
 
+@app.route('/api/admin/programmes', methods=['GET'])
+def get_admin_programmes():
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    programmes = Programme.query.all()
+    result = []
+    for p in programmes:
+        result.append({
+            'id': p.id,
+            'title': p.title,
+            'destination_id': p.destination_id,
+            'destination_name': p.destination.name if p.destination else 'N/A'
+        })
+    return jsonify(result)
+
 @app.route('/api/admin/programmes/<int:prog_id>', methods=['DELETE'])
 def delete_programme(prog_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
@@ -231,14 +427,77 @@ def delete_programme(prog_id):
     db.session.commit()
     return jsonify({'success': True})
 
-@app.route('/api/admin/destinations/<int:dest_id>/images', methods=['GET'])
-def get_images_for_destination(dest_id):
+
+@app.route('/api/admin/programmes/<int:prog_id>', methods=['PUT'])
+def update_programme(prog_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
-    destination = Destination.query.get_or_404(dest_id)
-    images = destination.images.all()
-    return jsonify([{'id': i.id, 'url': i.url} for i in images])
+    prog = Programme.query.get_or_404(prog_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON data"}), 400
+    prog.title = data.get('title', prog.title)
+    prog.description = data.get('description', prog.description)
+    prog.price = data.get('price', prog.price)
+    db.session.commit()
+    return jsonify({'success': True})
 
 
+@app.route('/api/admin/programmes/<int:prog_id>/days', methods=['GET'])
+def get_program_days(prog_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    programme = Programme.query.get_or_404(prog_id)
+    days = programme.program_days.order_by(ProgramDay.day_number).all()
+    return jsonify([{'id': d.id, 'day_number': d.day_number, 'title': d.title, 'description': d.description} for d in days])
+
+@app.route('/api/admin/programmes/<int:prog_id>/dates', methods=['GET'])
+def get_program_dates(prog_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    programme = Programme.query.get_or_404(prog_id)
+    dates = programme.available_dates.order_by(AvailableDate.date).all()
+    return jsonify([{'id': d.id, 'date': d.date.isoformat()} for d in dates])
+
+
+# --- CRUD ProgramDay ---
+
+@app.route('/api/admin/programmes/<int:prog_id>/days', methods=['POST'])
+def create_program_day(prog_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    data = request.get_json()
+    if not data or not data.get('day_number') or not data.get('title'):
+        return jsonify({"error": "day_number and title are required"}), 400
+    day = ProgramDay(
+        programme_id=prog_id,
+        day_number=data['day_number'],
+        title=data['title'],
+        description=data.get('description')
+    )
+    db.session.add(day)
+    db.session.commit()
+    return jsonify({'id': day.id}), 201
+
+@app.route('/api/admin/program_days/<int:day_id>', methods=['PUT'])
+def update_program_day(day_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    day = ProgramDay.query.get_or_404(day_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON data"}), 400
+    day.day_number = data.get('day_number', day.day_number)
+    day.title = data.get('title', day.title)
+    day.description = data.get('description', day.description)
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/api/admin/program_days/<int:day_id>', methods=['DELETE'])
+def delete_program_day(day_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    day = ProgramDay.query.get_or_404(day_id)
+    db.session.delete(day)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/api/admin/destinations/<int:dest_id>/images', methods=['GET'])
 def get_images_for_destination(dest_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
     destination = Destination.query.get_or_404(dest_id)
@@ -253,13 +512,10 @@ def create_date_for_programme(prog_id):
     date_str = data.get('date')
     if not date_str:
         return jsonify({'error': 'Date is required'}), 400
-    
-    # Convert string YYYY-MM-DD to date object
     try:
         date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
     except ValueError:
         return jsonify({'error': 'Invalid date format, use YYYY-MM-DD'}), 400
-
     new_date = AvailableDate(date=date_obj, programme_id=prog_id)
     db.session.add(new_date)
     db.session.commit()
@@ -278,8 +534,7 @@ def delete_available_date(date_id):
 def get_hotels():
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
     hotels = Hotel.query.all()
-    # Note: This is a simplified return. You might want to include destination info.
-    return jsonify([{'id': h.id, 'name': h.name, 'description': h.description, 'destination_id': h.destination_id} for h in hotels])
+    return jsonify([{'id': h.id, 'name': h.name, 'description': h.description, 'programme_id': h.programme_id} for h in hotels])
 
 @app.route('/api/admin/hotels', methods=['POST'])
 def create_hotel():
@@ -287,19 +542,14 @@ def create_hotel():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON data"}), 400
-
     name = data.get('name')
-    destination_id = data.get('destination_id')
-
-    if not name:
-        return jsonify({"error": "name is required"}), 400
-    if not destination_id:
-        return jsonify({"error": "destination_id is required"}), 400
-
+    programme_id = data.get('programme_id')
+    if not name or not programme_id:
+        return jsonify({"error": "name and programme_id are required"}), 400
     hotel = Hotel(
         name=name, 
         description=data.get('description'),
-        destination_id=destination_id
+        programme_id=programme_id
     )
     db.session.add(hotel)
     db.session.commit()
@@ -313,12 +563,45 @@ def delete_hotel(hotel_id):
     db.session.commit()
     return jsonify({'success': True})
 
+@app.route('/api/admin/hotels/<int:hotel_id>', methods=['PUT'])
+def update_hotel(hotel_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    hotel = Hotel.query.get_or_404(hotel_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON data"}), 400
+    hotel.name = data.get('name', hotel.name)
+    hotel.description = data.get('description', hotel.description)
+    hotel.programme_id = data.get('programme_id', hotel.programme_id)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/api/admin/hotels/<int:hotel_id>/images', methods=['GET'])
 def get_images_for_hotel(hotel_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
     hotel = Hotel.query.get_or_404(hotel_id)
-    images = hotel.images.all()
+    images = hotel.images
     return jsonify([{'id': i.id, 'url': i.url} for i in images])
+
+@app.route('/api/admin/hotels/<int:hotel_id>/images', methods=['POST'])
+def add_image_to_hotel(hotel_id):
+    if not is_admin(request): return jsonify(error='Unauthorized'), 403
+    hotel = Hotel.query.get_or_404(hotel_id)
+    files = request.files.getlist('images')
+    if not files:
+        return jsonify({'error': 'No images provided'}), 400
+    for file in files:
+        if file and file.filename:
+            ext = os.path.splitext(file.filename)[1]
+            unique_filename = f"{uuid.uuid4().hex}{ext}"
+            filename = secure_filename(unique_filename)
+            path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(path)
+            url = f'/uploads/{filename}'
+            image = Image(url=url, hotel_id=hotel.id)
+            db.session.add(image)
+    db.session.commit()
+    return jsonify({'success': True})
 
 # --- CRUD Activity ---
 @app.route('/api/admin/activities', methods=['GET'])
@@ -333,15 +616,10 @@ def create_activity():
     data = request.get_json()
     if not data:
         return jsonify({"error": "Invalid JSON data"}), 400
-
     name = data.get('name')
     destination_id = data.get('destination_id')
-
-    if not name:
-        return jsonify({"error": "name is required"}), 400
-    if not destination_id:
-        return jsonify({"error": "destination_id is required"}), 400
-
+    if not name or not destination_id:
+        return jsonify({"error": "name and destination_id are required"}), 400
     activity = Activity(
         name=name, 
         description=data.get('description'),
@@ -363,7 +641,7 @@ def delete_activity(activity_id):
 def get_images_for_activity(activity_id):
     if not is_admin(request): return jsonify(error='Unauthorized'), 403
     activity = Activity.query.get_or_404(activity_id)
-    images = activity.images.all()
+    images = activity.images
     return jsonify([{'id': i.id, 'url': i.url} for i in images])
 
 # --- MAIN EXECUTION ---

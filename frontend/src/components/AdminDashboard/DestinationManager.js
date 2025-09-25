@@ -1,83 +1,158 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import DestinationDetail from './DestinationDetail'; // Importer le nouveau composant
+import DestinationDetail from './DestinationDetail';
+import { getAdminDestinations, createDestination, deleteDestination } from '../../api';
 
 function DestinationManager() {
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
+  // Form state for adding a new destination
   const [newDestName, setNewDestName] = useState('');
   const [newDestDesc, setNewDestDesc] = useState('');
+  const [newDestImages, setNewDestImages] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State pour la vue de détail
+  // State for switching to the detail view
   const [viewingDestId, setViewingDestId] = useState(null);
-
-  const username = localStorage.getItem('username');
 
   const fetchDestinations = useCallback(async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/admin/destinations?username=${username}`);
-      if (!response.ok) throw new Error('Failed to fetch destinations');
-      const data = await response.json();
+      setLoading(true);
+      const data = await getAdminDestinations();
       setDestinations(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  }, [username]);
+  }, []);
 
   useEffect(() => {
-    if (username) {
-      fetchDestinations();
-    }
-  }, [fetchDestinations, username]);
+    fetchDestinations();
+  }, [fetchDestinations]);
+
+  const handleImageChange = (e) => {
+    setNewDestImages(e.target.files);
+  };
 
   const handleAddDestination = async (e) => {
     e.preventDefault();
-    // ... (logique existante)
+    setIsSubmitting(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append('name', newDestName);
+    formData.append('description', newDestDesc);
+    for (let i = 0; i < newDestImages.length; i++) {
+      formData.append('images', newDestImages[i]);
+    }
+
+    try {
+      await createDestination(formData);
+      // Reset form and refresh list
+      setNewDestName('');
+      setNewDestDesc('');
+      setNewDestImages([]);
+      document.getElementById('images').value = ''; // Clear file input
+      fetchDestinations();
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleDeleteDestination = async (id) => {
-    // ... (logique existante)
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this destination? This will delete all associated programs, hotels, and activities.')) {
+      return;
+    }
+    try {
+      await deleteDestination(id);
+      fetchDestinations(); // Refresh list
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
-  // Si on regarde une destination en détail, on affiche le composant de détail
   if (viewingDestId) {
-    return <DestinationDetail destinationId={viewingDestId} onBack={() => setViewingDestId(null)} />
+    return <DestinationDetail destinationId={viewingDestId} onBack={() => setViewingDestId(null)} />;
   }
 
-  // Sinon, on affiche la liste et le formulaire d'ajout
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div className="alert alert-danger">Error: {error}</div>;
+
   return (
     <div>
-      <h1 className="mb-4">Gestion des Destinations</h1>
+      <h1 className="mb-4">Manage Destinations</h1>
 
-      {/* Add Destination Form */}
       <div className="card mb-4">
-        {/* ... (formulaire existant) ... */}
+        <div className="card-header">Add New Destination</div>
+        <div className="card-body">
+          <form onSubmit={handleAddDestination}>
+            <div className="mb-3">
+              <label htmlFor="name" className="form-label">Destination Name</label>
+              <input
+                type="text"
+                className="form-control"
+                id="name"
+                value={newDestName}
+                onChange={(e) => setNewDestName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="mb-3">
+              <label htmlFor="description" className="form-label">Description</label>
+              <textarea
+                className="form-control"
+                id="description"
+                rows="3"
+                value={newDestDesc}
+                onChange={(e) => setNewDestDesc(e.target.value)}
+              ></textarea>
+            </div>
+            <div className="mb-3">
+              <label htmlFor="images" className="form-label">Images</label>
+              <input
+                type="file"
+                className="form-control"
+                id="images"
+                multiple
+                onChange={handleImageChange}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+              {isSubmitting ? 'Adding...' : 'Add Destination'}
+            </button>
+          </form>
+        </div>
       </div>
 
-      {/* Destinations List */}
       <div className="card">
-        <div className="card-header">Liste des destinations</div>
-        <div className="card-body">
-          <ul className="list-group list-group-flush">
-            {destinations.map(dest => (
+        <div className="card-header">Existing Destinations</div>
+        <ul className="list-group list-group-flush">
+          {destinations.length === 0 ? (
+            <li className="list-group-item">No destinations found.</li>
+          ) : (
+            destinations.map(dest => (
               <li key={dest.id} className="list-group-item d-flex justify-content-between align-items-center">
                 <div>
                   <h5>{dest.name}</h5>
-                  <p className="mb-0">{dest.description}</p>
+                  <p className="mb-0 text-muted">{dest.description?.substring(0, 100)}...</p>
                 </div>
                 <div>
-                  {/* Ce bouton navigue vers la vue de détail */}
-                  <button className="btn btn-sm btn-primary me-2" onClick={() => setViewingDestId(dest.id)}>Gérer</button>
-                  <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteDestination(dest.id)}>Supprimer</button>
+                  <button className="btn btn-primary btn-sm me-2" onClick={() => setViewingDestId(dest.id)}>
+                    Manage
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(dest.id)}>
+                    Delete
+                  </button>
                 </div>
               </li>
-            ))}
-          </ul>
-        </div>
+            ))
+          )}
+        </ul>
       </div>
     </div>
   );
